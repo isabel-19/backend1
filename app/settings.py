@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
 
     frontend_redirect_url: str = "http://localhost:9000/"
+    mobile_frontend_redirect_url: str = "com.recetas.saludables://auth/callback"
 
     jwt_secret: str = "change-me"
     jwt_ttl_minutes: int = 60 * 24 * 7

@@ -13,7 +13,7 @@ import random
 import re
 import smtplib
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 import unicodedata
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -2280,6 +2280,20 @@ def _frontend_origin_from_request(request: Request) -> str | None:
     return None
 
 
+def _is_mobile_login(flag: str | None) -> bool:
+    if not flag:
+        return False
+    return flag.strip().lower() in {"1", "true", "yes", "mobile"}
+
+
+def _build_mobile_redirect_target(redirect_path: str | None) -> str:
+    base = settings.mobile_frontend_redirect_url.strip() or "com.recetas.saludables://auth/callback"
+    if redirect_path and _is_safe_redirect(redirect_path) and redirect_path.startswith("/"):
+        separator = "&" if "?" in base else "?"
+        return f"{base}{separator}{urlencode({'redirect': redirect_path})}"
+    return base
+
+
 def _upsert_user(
     session: Session,
     *,
@@ -2646,12 +2660,19 @@ async def health():
 
 
 @app.get("/api/auth/google/login")
-async def google_login(request: Request, redirect: str | None = None, origin: str | None = None):
+async def google_login(
+    request: Request,
+    redirect: str | None = None,
+    origin: str | None = None,
+    mobile: str | None = None,
+):
     if not settings.google_client_id or not settings.google_client_secret:
         raise HTTPException(status_code=500, detail="Google OAuth no configurado (GOOGLE_CLIENT_ID/SECRET)")
 
     if redirect and _is_safe_redirect(redirect):
         request.session["post_login_redirect"] = redirect
+
+    request.session["post_login_mobile"] = _is_mobile_login(mobile)
 
     # Recordar el origen exacto del frontend (host:puerto) para volver a él al
     # final. El parámetro explícito gana; si no, se infiere de Origin/Referer.
@@ -2724,6 +2745,12 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
         ttl_minutes=settings.jwt_ttl_minutes,
     )
 
+    redirect_path = request.session.pop("post_login_redirect", None)
+    if request.session.pop("post_login_mobile", False):
+        response = RedirectResponse(url=_build_mobile_redirect_target(redirect_path), status_code=302)
+        _set_auth_cookie(response, jwt_token)
+        return response
+
     # Origen del frontend al que volver: el host por el que entró el usuario,
     # para que la cookie de auth (fijada en este host de backend) viaje después.
     frontend_origin = request.session.pop("post_login_origin", None)
@@ -2731,7 +2758,6 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
         frontend_origin = settings.frontend_redirect_url
     frontend_origin = frontend_origin.rstrip("/")
 
-    redirect_path = request.session.pop("post_login_redirect", None)
     if redirect_path and _is_safe_redirect(redirect_path):
         # Ruta relativa -> anclar al origen del frontend; absoluta segura -> usar tal cual.
         redirect_target = f"{frontend_origin}{redirect_path}" if redirect_path.startswith("/") else redirect_path
