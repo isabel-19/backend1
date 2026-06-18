@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
 
-    frontend_redirect_url: str = "http://localhost:9000/"
+    frontend_redirect_url: str = "https://backend1-2-bz7g.onrender.com"
     mobile_frontend_redirect_url: str = "com.recetas.saludables://auth/callback"
 
     jwt_secret: str = "change-me"
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"  # lax|strict|none
 
-    cors_origins: str = "http://localhost:9000"
+    cors_origins: str = "https://backend1-2-bz7g.onrender.com"
 
     host: str = "127.0.0.1"
     port: int = 8000

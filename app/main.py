@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 def _build_cors_origins() -> list[str]:
     configured = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     if not configured:
-        configured = ["http://localhost:9000"]
+        configured = ["https://backend1-2-bz7g.onrender.com"]
 
     origins: set[str] = set(configured)
     local_hosts = {"localhost", "127.0.0.1"}
