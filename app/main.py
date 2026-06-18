@@ -13,7 +13,7 @@ import random
 import re
 import smtplib
 from typing import Any
-from urllib.parse import urlencode, urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import unicodedata
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -2286,12 +2286,27 @@ def _is_mobile_login(flag: str | None) -> bool:
     return flag.strip().lower() in {"1", "true", "yes", "mobile"}
 
 
-def _build_mobile_redirect_target(redirect_path: str | None) -> str:
+def _build_mobile_redirect_target(redirect_path: str | None, token: str | None = None) -> str:
     base = settings.mobile_frontend_redirect_url.strip() or "com.recetas.saludables://auth/callback"
+    params: dict[str, str] = {}
     if redirect_path and _is_safe_redirect(redirect_path) and redirect_path.startswith("/"):
-        separator = "&" if "?" in base else "?"
-        return f"{base}{separator}{urlencode({'redirect': redirect_path})}"
-    return base
+        params["redirect"] = redirect_path
+    if token:
+        params["token"] = token
+    if not params:
+        return base
+
+    separator = "&" if "?" in base else "?"
+    return f"{base}{separator}{urlencode(params)}"
+
+
+def _append_query_params(url: str, params: dict[str, str | None]) -> str:
+    parsed = urlparse(url)
+    current = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        if value:
+            current[key] = value
+    return urlunparse(parsed._replace(query=urlencode(current)))
 
 
 def _upsert_user(
@@ -2747,7 +2762,7 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
 
     redirect_path = request.session.pop("post_login_redirect", None)
     if request.session.pop("post_login_mobile", False):
-        response = RedirectResponse(url=_build_mobile_redirect_target(redirect_path), status_code=302)
+        response = RedirectResponse(url=_build_mobile_redirect_target(redirect_path, jwt_token), status_code=302)
         _set_auth_cookie(response, jwt_token)
         return response
 
@@ -2763,6 +2778,10 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
         redirect_target = f"{frontend_origin}{redirect_path}" if redirect_path.startswith("/") else redirect_path
     else:
         redirect_target = frontend_origin or settings.frontend_redirect_url
+
+    request_origin = f"{request.url.scheme}://{request.url.netloc}"
+    if frontend_origin and frontend_origin.rstrip("/") != request_origin.rstrip("/"):
+        redirect_target = _append_query_params(redirect_target, {"token": jwt_token})
 
     response = RedirectResponse(url=redirect_target, status_code=302)
     _set_auth_cookie(response, jwt_token)
