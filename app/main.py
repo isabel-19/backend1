@@ -2628,9 +2628,21 @@ def _require_user(request: Request, session: Session) -> tuple[User, dict]:
     return user, payload
 
 
+@app.get("/")
+async def root():
+    return {
+        "ok": True,
+        "service": "Recetas API",
+        "docs_url": "/docs",
+        "health_url": "/api/health",
+        "message": "Backend activo en Render.",
+    }
+
+
+@app.get("/health")
 @app.get("/api/health")
 async def health():
-    return {"ok": True}
+    return {"ok": True, "service": "Recetas API"}
 
 
 @app.get("/api/auth/google/login")
