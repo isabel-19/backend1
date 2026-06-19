@@ -61,11 +61,18 @@ logger = logging.getLogger(__name__)
 def _build_cors_origins() -> list[str]:
     configured = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     if not configured:
-        configured = ["https://backend1-2-bz7g.onrender.com"]
+        configured = ["https://backend1-2-8gx9.onrender.com"]
 
     origins: set[str] = set(configured)
     local_hosts = {"localhost", "127.0.0.1"}
     local_ports = {9000, 9001}
+
+    # Permitir siempre los hosts locales del frontend en desarrollo para que el
+    # callback OAuth pueda volver al origen local exacto y adjuntar el token.
+    for candidate_host in local_hosts:
+        for port in local_ports:
+            origins.add(f"http://{candidate_host}:{port}")
+            origins.add(f"https://{candidate_host}:{port}")
 
     for origin in list(configured):
         parsed = urlparse(origin)
@@ -2209,7 +2216,7 @@ def _clear_auth_cookie(response: RedirectResponse) -> None:
 
 def _allowed_redirects() -> list[str]:
     defaults = [settings.frontend_redirect_url]
-    cors = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+    cors = _build_cors_origins()
     return list({*defaults, *cors})
 
 
@@ -2374,7 +2381,7 @@ def _verify_password(password: str, encoded_hash: str) -> bool:
     return hmac.compare_digest(computed, expected)
 
 
-def _issue_auth_cookie(response: Response, user: User, payload_name: str | None = None) -> None:
+def _issue_auth_cookie(response: Response, user: User, payload_name: str | None = None) -> str:
     jwt_token = create_access_token(
         subject=user.email,
         payload={
@@ -2395,6 +2402,7 @@ def _issue_auth_cookie(response: Response, user: User, payload_name: str | None 
         path="/",
         max_age=settings.jwt_ttl_minutes * 60,
     )
+    return jwt_token
 
 
 def _parse_date(raw: str | date | None) -> date | None:
@@ -2620,23 +2628,23 @@ def _get_profile_for_user(session: Session, user_id: int) -> Profile | None:
     return session.exec(stmt).first()
 
 
-def _require_user(request: Request, session: Session) -> tuple[User, dict]:
+def _resolve_user_from_request(request: Request, session: Session) -> tuple[User | None, dict | None]:
     raw = request.cookies.get(COOKIE_NAME)
     if not raw:
         auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
         if auth_header and auth_header.lower().startswith("bearer "):
             raw = auth_header.split(" ", maxsplit=1)[1].strip()
     if not raw:
-        raise HTTPException(status_code=401, detail="No autenticado")
+        return None, None
 
     try:
         payload = decode_access_token(raw, settings.jwt_secret)
     except Exception:
-        raise HTTPException(status_code=401, detail="Token inválido")
+        return None, None
 
     email = payload.get("email") or payload.get("sub")
     if not email:
-        raise HTTPException(status_code=400, detail="No se pudo determinar el usuario")
+        return None, payload
 
     user_id = payload.get("user_id")
     user: User | None = None
@@ -2654,6 +2662,15 @@ def _require_user(request: Request, session: Session) -> tuple[User, dict]:
         session.commit()
         session.refresh(user)
 
+    return user, payload
+
+
+def _require_user(request: Request, session: Session) -> tuple[User, dict]:
+    user, payload = _resolve_user_from_request(request, session)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    if user is None:
+        raise HTTPException(status_code=400, detail="No se pudo determinar el usuario")
     return user, payload
 
 
@@ -2781,7 +2798,8 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
 
     request_origin = f"{request.url.scheme}://{request.url.netloc}"
     if frontend_origin and frontend_origin.rstrip("/") != request_origin.rstrip("/"):
-        redirect_target = _append_query_params(redirect_target, {"token": jwt_token})
+        web_redirect = redirect_path if redirect_path and redirect_path.startswith("/") else None
+        redirect_target = _append_query_params(redirect_target, {"token": jwt_token, "redirect": web_redirect})
 
     response = RedirectResponse(url=redirect_target, status_code=302)
     _set_auth_cookie(response, jwt_token)
@@ -2830,11 +2848,12 @@ async def auth_register(payload: AuthPasswordPayload, request: Request, response
     )
     session.commit()
 
-    _issue_auth_cookie(response, new_user)
+    jwt_token = _issue_auth_cookie(response, new_user)
     return {
         "email": new_user.email,
         "name": new_user.full_name,
         "picture": new_user.picture_url,
+        "token": jwt_token,
     }
 
 
@@ -2871,11 +2890,12 @@ async def auth_login(payload: AuthPasswordPayload, request: Request, response: R
     )
     session.commit()
 
-    _issue_auth_cookie(response, user)
+    jwt_token = _issue_auth_cookie(response, user)
     return {
         "email": user.email,
         "name": user.full_name,
         "picture": user.picture_url,
+        "token": jwt_token,
     }
 
 
