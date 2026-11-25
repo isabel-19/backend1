@@ -2694,27 +2694,29 @@ async def health():
 @app.get("/api/auth/google/login")
 async def google_login(
     request: Request,
-    redirect: str | None = None,
-    origin: str | None = None,
     mobile: str | None = None,
 ):
     if not settings.google_client_id or not settings.google_client_secret:
         raise HTTPException(status_code=500, detail="Google OAuth no configurado (GOOGLE_CLIENT_ID/SECRET)")
 
-    if redirect and _is_safe_redirect(redirect):
-        request.session["post_login_redirect"] = redirect
+    # Evitar redirects dinámicos públicos: el destino web post-login es fijo.
+    request.session["post_login_redirect"] = "/app"
 
     request.session["post_login_mobile"] = _is_mobile_login(mobile)
 
-    # Recordar el origen exacto del frontend (host:puerto) para volver a él al
-    # final. El parámetro explícito gana; si no, se infiere de Origin/Referer.
-    frontend_origin = origin if _is_allowed_origin(origin) else _frontend_origin_from_request(request)
+    # El origen sólo se infiere de headers del request y se valida.
+    frontend_origin = _frontend_origin_from_request(request)
     if frontend_origin:
         request.session["post_login_origin"] = frontend_origin
 
     # Usar el mismo host que recibe la petición para no romper la cookie de sesión (state)
     redirect_uri = str(request.url_for("google_callback"))
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    return await oauth.google.authorize_redirect(
+        request,
+        redirect_uri,
+        prompt="consent select_account",
+        include_granted_scopes="false",
+    )
 
 
 @app.get("/api/auth/google/callback", name="google_callback")
@@ -2799,6 +2801,9 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
     request_origin = f"{request.url.scheme}://{request.url.netloc}"
     if frontend_origin and frontend_origin.rstrip("/") != request_origin.rstrip("/"):
         web_redirect = redirect_path if redirect_path and redirect_path.startswith("/") else None
+        # En web cruzando dominios, aterrizar primero en /login para hidratar token
+        # y luego navegar al destino final indicado en `redirect`.
+        redirect_target = f"{frontend_origin}/login"
         redirect_target = _append_query_params(redirect_target, {"token": jwt_token, "redirect": web_redirect})
 
     response = RedirectResponse(url=redirect_target, status_code=302)
