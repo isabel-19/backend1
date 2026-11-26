@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import Column, JSON, String
 from sqlmodel import Field, SQLModel
 
+from .timeutil import utc_now
+
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
@@ -16,8 +18,8 @@ class User(SQLModel, table=True):
     picture_url: str | None = Field(default=None, sa_column=Column("picture_url", String(1024)))
     google_sub: str | None = Field(default=None, sa_column=Column("google_sub", String(255), unique=True, nullable=True))
     last_login_at: datetime | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserCredential(SQLModel, table=True):
@@ -25,8 +27,8 @@ class UserCredential(SQLModel, table=True):
 
     user_id: int = Field(foreign_key="users.id", primary_key=True)
     password_hash: str = Field(sa_column=Column("password_hash", String(512), nullable=False))
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserLoginEvent(SQLModel, table=True):
@@ -37,7 +39,7 @@ class UserLoginEvent(SQLModel, table=True):
     provider: str | None = Field(default=None, sa_column=Column("provider", String(32)))
     ip_address: str | None = Field(default=None, sa_column=Column("ip_address", String(64)))
     user_agent: str | None = Field(default=None, sa_column=Column("user_agent", String(512)))
-    logged_in_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    logged_in_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class Profile(SQLModel, table=True):
@@ -67,8 +69,8 @@ class Profile(SQLModel, table=True):
     )
     food_restriction_other: str | None = Field(default=None, sa_column=Column("food_restriction_other", String(255)))
     wizard_completed: bool = Field(default=False, nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class Recipe(SQLModel, table=True):
@@ -84,8 +86,8 @@ class Recipe(SQLModel, table=True):
     image_url: str | None = Field(default=None, sa_column=Column("image_url", String(1024)))
     diet_tags: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False, default=list))
     created_by_id: int | None = Field(default=None, foreign_key="users.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class RecipeIngredient(SQLModel, table=True):
@@ -128,7 +130,7 @@ class RecipeNutrition(SQLModel, table=True):
     sugars: float = Field(default=0, nullable=False)
     sodium_mg: float = Field(default=0, nullable=False)
     source: str = Field(default="internal-db", sa_column=Column("source", String(64), nullable=False, default="internal-db"))
-    calculated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    calculated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserRecipeConsumption(SQLModel, table=True):
@@ -137,7 +139,7 @@ class UserRecipeConsumption(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     recipe_id: int = Field(foreign_key="recipes.id", nullable=False, index=True)
-    consumed_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    consumed_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
     portion: float = Field(default=1.0, nullable=False)
     nutritional_score: float = Field(default=0, nullable=False)
     calories: float = Field(default=0, nullable=False)
@@ -147,7 +149,7 @@ class UserRecipeConsumption(SQLModel, table=True):
     sugars: float = Field(default=0, nullable=False)
     sodium_mg: float = Field(default=0, nullable=False)
     is_baseline: bool = Field(default=False, nullable=False, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserHabitBaseline(SQLModel, table=True):
@@ -161,8 +163,8 @@ class UserHabitBaseline(SQLModel, table=True):
     water_daily_glasses: float = Field(default=0, nullable=False)
     meal_schedule: str | None = Field(default=None, sa_column=Column("meal_schedule", String(255)))
     hai_score: int = Field(default=0, nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserWeightLog(SQLModel, table=True):
@@ -171,9 +173,9 @@ class UserWeightLog(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     weight_kg: float = Field(nullable=False)
-    recorded_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    recorded_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
     source: str = Field(default="profile", sa_column=Column("source", String(64), nullable=False, default="profile"))
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserHabitActivity(SQLModel, table=True):
@@ -186,7 +188,7 @@ class UserHabitActivity(SQLModel, table=True):
     recipe_type: str | None = Field(default=None, sa_column=Column("recipe_type", String(64)))
     interaction_type: str | None = Field(default=None, sa_column=Column("interaction_type", String(64)))
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False, default=dict))
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
 
 
 class UserFavoriteRecipe(SQLModel, table=True):
@@ -194,7 +196,7 @@ class UserFavoriteRecipe(SQLModel, table=True):
 
     user_id: int = Field(foreign_key="users.id", primary_key=True)
     recipe_id: int = Field(foreign_key="recipes.id", primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserRecentRecipe(SQLModel, table=True):
@@ -203,7 +205,7 @@ class UserRecentRecipe(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     recipe_id: int = Field(foreign_key="recipes.id", nullable=False)
-    seen_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    seen_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class PantryItem(SQLModel, table=True):
@@ -213,8 +215,8 @@ class PantryItem(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     name: str = Field(sa_column=Column("name", String(255), nullable=False))
     is_missing: bool = Field(default=True, nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class WeeklyPlan(SQLModel, table=True):
@@ -225,8 +227,8 @@ class WeeklyPlan(SQLModel, table=True):
     week_start_date: date = Field(nullable=False)
     theme: str | None = Field(default=None, sa_column=Column("theme", String(255)))
     notes: str | None = Field(default=None, sa_column=Column("notes", String(1024)))
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class WeeklyMeal(SQLModel, table=True):
@@ -246,7 +248,7 @@ class DailyFoodLog(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
-    consumed_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    consumed_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
     meal_type: str = Field(default="snack", sa_column=Column("meal_type", String(32), nullable=False, default="snack"))
     food_name: str = Field(sa_column=Column("food_name", String(255), nullable=False))
     quantity: str | None = Field(default=None, sa_column=Column("quantity", String(128)))
@@ -254,7 +256,7 @@ class DailyFoodLog(SQLModel, table=True):
     calories_estimate: float | None = None
     is_healthy: bool = Field(default=False, nullable=False, index=True)
     notes: str | None = Field(default=None, sa_column=Column("notes", String(512)))
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
 class UserFoodSwapEvent(SQLModel, table=True):
@@ -266,7 +268,7 @@ class UserFoodSwapEvent(SQLModel, table=True):
     original_food: str = Field(sa_column=Column("original_food", String(255), nullable=False))
     suggested_food: str = Field(sa_column=Column("suggested_food", String(255), nullable=False))
     accepted: bool = Field(default=False, nullable=False, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
 
 
 class UserReminderSetting(SQLModel, table=True):
@@ -278,5 +280,5 @@ class UserReminderSetting(SQLModel, table=True):
     hours_without_log: int = Field(default=24, nullable=False)
     email_override: str | None = Field(default=None, sa_column=Column("email_override", String(255)))
     last_email_sent_at: datetime | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now, nullable=False)

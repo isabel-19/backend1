@@ -4,7 +4,6 @@ import argparse
 import logging
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Iterable, Iterator
 from urllib.parse import urljoin
 
@@ -22,6 +21,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from .db import engine, init_db
 from .models import ScrapedRecipe
+from .timeutil import utc_now
 
 BASE_URL = "https://medlineplus.gov/spanish/recetas/"
 LOGGER = logging.getLogger("scraper")
@@ -171,7 +171,7 @@ class RecipeScraper:
         slug = self._slug_from_url(card.url)
         stmt = select(ScrapedRecipe).where(ScrapedRecipe.recipe_slug == slug)
         recipe = session.exec(stmt).first()
-        timestamp = datetime.utcnow()
+        timestamp = utc_now()
         payload = {
             "category_name": category.name,
             "category_url": category.url,
