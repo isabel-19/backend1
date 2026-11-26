@@ -1598,8 +1598,11 @@ def _is_preparation_request(text: str) -> bool:
     if not normalized:
         return False
     tokens = [
-        "preparacion", "preparacion", "preparar", "como se prepara", "como preparo",
-        "pasos", "instrucciones", "receta completa", "como hacerlo", "como hacerla",
+        "preparacion", "preparar", "prepara", "prepare", "preparo", "preparen",
+        "como se prepara", "como preparo", "como lo preparo", "como la preparo",
+        "como se hace", "como lo hago", "como la hago", "como se cocina", "como lo cocino",
+        "pasos", "paso a paso", "instrucciones", "receta completa", "como hacerlo", "como hacerla",
+        "como se elabora", "como lo elaboro", "como la elaboro",
     ]
     return any(token in normalized for token in tokens)
 
