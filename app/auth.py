@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from jose import jwt
 
+from .timeutil import utc_now
 
 ALGORITHM = "HS256"
 
 
 def create_access_token(*, subject: str, payload: dict, secret: str, ttl_minutes: int) -> str:
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     exp = now + timedelta(minutes=ttl_minutes)
     to_encode = {
         "sub": subject,

@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
 
 from .auth import create_access_token, decode_access_token
 from .db import engine, get_session, init_db
+from .timeutil import as_utc, utc_now
 from .models import (
     DailyFoodLog,
     Profile,
@@ -828,6 +829,8 @@ def _latest_consumption_datetime(session: Session, user_id: int) -> datetime | N
         .limit(1)
     ).first()
 
+    recipe_last = as_utc(recipe_last)
+    manual_last = as_utc(manual_last)
     if recipe_last and manual_last:
         return max(recipe_last, manual_last)
     return recipe_last or manual_last
@@ -857,7 +860,7 @@ def _get_or_create_recipe_nutrition(
         return existing
 
     nutrients = _estimate_recipe_nutrients(session, recipe)
-    now = datetime.utcnow()
+    now = utc_now()
 
     if existing is None:
         existing = RecipeNutrition(
@@ -2326,7 +2329,7 @@ def _upsert_user(
 ) -> User:
     stmt = select(User).where(User.email == email)
     user = session.exec(stmt).first()
-    now = datetime.utcnow()
+    now = utc_now()
 
     if user:
         if name:
@@ -2457,7 +2460,7 @@ def _append_weight_log(session: Session, user_id: int, weight_kg: float | None, 
         UserWeightLog(
             user_id=user_id,
             weight_kg=float(weight_kg),
-            recorded_at=datetime.utcnow(),
+            recorded_at=utc_now(),
             source=source,
         )
     )
@@ -2760,8 +2763,8 @@ async def google_callback(request: Request, session: Session = Depends(get_sessi
                     user_agent=user_agent,
                 )
             )
-            user.last_login_at = datetime.utcnow()
-            user.updated_at = datetime.utcnow()
+            user.last_login_at = utc_now()
+            user.updated_at = utc_now()
             session.add(user)
             session.commit()
         except Exception:
@@ -2824,7 +2827,7 @@ async def auth_register(payload: AuthPasswordPayload, request: Request, response
     if existing_user is not None:
         raise HTTPException(status_code=409, detail="Este correo ya tiene una cuenta. Inicia sesión.")
 
-    now = datetime.utcnow()
+    now = utc_now()
     new_user = User(
         email=email,
         full_name=(payload.full_name or "").strip() or None,
@@ -2881,7 +2884,7 @@ async def auth_login(payload: AuthPasswordPayload, request: Request, response: R
     if not _verify_password(password, credential.password_hash):
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
 
-    now = datetime.utcnow()
+    now = utc_now()
     user.last_login_at = now
     user.updated_at = now
     session.add(user)
@@ -2965,7 +2968,7 @@ async def create_profile(payload: ProfilePayload, request: Request, session: Ses
 
     profile = Profile(user_id=user.id, wizard_completed=True)
     _apply_profile_payload(profile, payload, partial=False)
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = utc_now()
 
     session.add(profile)
     if profile.weight_kg is not None:
@@ -2984,7 +2987,7 @@ async def update_profile(payload: ProfilePayload, request: Request, session: Ses
 
     changed_fields = payload.model_dump(exclude_unset=True)
     _apply_profile_payload(profile, payload, partial=True)
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = utc_now()
     session.add(profile)
     if "weight_kg" in changed_fields and profile.weight_kg is not None:
         _append_weight_log(session, user.id, profile.weight_kg, source="profile_update")
@@ -3156,7 +3159,7 @@ async def register_recipe_consumption(
     ).one()
 
     auto_baseline = bool(not payload.baseline and int(existing_baseline_records or 0) == 0 and int(existing_records or 0) < 3)
-    consumed_at = payload.fecha_consumo or datetime.utcnow()
+    consumed_at = as_utc(payload.fecha_consumo) or utc_now()
     row = UserRecipeConsumption(
         user_id=int(user.id),
         recipe_id=int(recipe.id),
@@ -3195,7 +3198,7 @@ async def user_nutrition_summary(
 ):
     user, _ = _require_user(request, session)
     days = min(max(days, 7), 365)
-    from_date = datetime.utcnow() - timedelta(days=days)
+    from_date = utc_now() - timedelta(days=days)
 
     rows = session.exec(
         select(UserRecipeConsumption)
@@ -3291,7 +3294,7 @@ async def register_daily_food_log(
 
     row = DailyFoodLog(
         user_id=int(user.id),
-        consumed_at=payload.consumed_at or datetime.utcnow(),
+        consumed_at=as_utc(payload.consumed_at) or utc_now(),
         meal_type=meal_type,
         food_name=payload.food_name.strip(),
         quantity=(payload.quantity or "").strip() or None,
@@ -3327,7 +3330,7 @@ async def list_daily_food_logs(
     user, _ = _require_user(request, session)
     days = min(max(days, 1), 365)
     limit = min(max(limit, 1), 500)
-    from_date = datetime.utcnow() - timedelta(days=days)
+    from_date = utc_now() - timedelta(days=days)
 
     rows = session.exec(
         select(DailyFoodLog)
@@ -3362,7 +3365,7 @@ async def daily_consumption_patterns(
 ):
     user, _ = _require_user(request, session)
     days = min(max(days, 7), 365)
-    from_date = datetime.utcnow() - timedelta(days=days)
+    from_date = utc_now() - timedelta(days=days)
 
     rows = session.exec(
         select(DailyFoodLog)
@@ -3400,7 +3403,7 @@ async def healthy_frequency_report(
 ):
     user, _ = _require_user(request, session)
     days = min(max(days, 14), 365)
-    from_date = datetime.utcnow() - timedelta(days=days)
+    from_date = utc_now() - timedelta(days=days)
 
     recipe_rows = session.exec(
         select(UserRecipeConsumption)
@@ -3491,7 +3494,7 @@ async def update_reminder_settings(
     row.enabled = bool(payload.enabled)
     row.hours_without_log = int(payload.hours_without_log)
     row.email_override = (payload.email_override or "").strip() or None
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -3524,7 +3527,7 @@ async def check_reminder_and_notify(
         )
 
     last_log_at = _latest_consumption_datetime(session, int(user.id))
-    now = datetime.utcnow()
+    now = utc_now()
     if last_log_at is None:
         hours_since = 9999.0
     else:
@@ -3561,7 +3564,7 @@ async def check_reminder_and_notify(
 
     # Evita spam: maximo un correo cada 12 horas, salvo force_send.
     if not force_send and row.last_email_sent_at:
-        cooldown_hours = (now - row.last_email_sent_at).total_seconds() / 3600.0
+        cooldown_hours = (now - as_utc(row.last_email_sent_at)).total_seconds() / 3600.0
         if cooldown_hours < 12:
             return ReminderCheckResponse(
                 enabled=True,
@@ -3687,7 +3690,7 @@ async def food_swap_indicator(
 ):
     user, _ = _require_user(request, session)
     days = min(max(days, 7), 365)
-    from_date = datetime.utcnow() - timedelta(days=days)
+    from_date = utc_now() - timedelta(days=days)
 
     rows = session.exec(
         select(UserFoodSwapEvent)
@@ -3715,7 +3718,7 @@ async def register_habits_baseline(
     user, _ = _require_user(request, session)
 
     existing = session.exec(select(UserHabitBaseline).where(UserHabitBaseline.user_id == user.id)).first()
-    now = datetime.utcnow()
+    now = utc_now()
 
     raw_score = sum(
         _baseline_component_scores(
@@ -3785,7 +3788,7 @@ async def register_habits_activity(
         recipe_type=payload.recipe_type,
         interaction_type=payload.interaction_type,
         metadata_json=payload.metadata_json or {},
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(row)
     session.commit()
